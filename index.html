@@ -20,7 +20,7 @@
             <div><strong id="cityCount">0</strong><span>个真实目的地</span></div>
             <div><strong id="departureCount">0</strong><span>个出发城市</span></div>
             <div><strong id="nearbyCount">0</strong><span>当前可达</span></div>
-            <div><strong id="visitedCount">0</strong><span>已去过降权</span></div>
+            <div><strong id="visitedCount">0</strong><span>已去过排除</span></div>
           </div>
         </div>
       </section>
@@ -55,31 +55,12 @@
                 <option value="3">3天2晚</option>
               </select>
             </label>
-            <label class="field">
-              <span>去过目的地降权</span>
-              <select id="visitedPenalty" name="visitedPenalty">
-                <option value="0.25">明显降低</option>
-                <option value="0.45">轻度降低</option>
-                <option value="0.08">几乎不抽到</option>
-              </select>
-            </label>
-          </div>
-
-          <div class="switch-row">
-            <label class="switch">
-              <input type="checkbox" id="strictRange" checked />
-              <span>优先限制在所选交通范围内</span>
-            </label>
-            <label class="switch">
-              <input type="checkbox" id="surpriseMode" />
-              <span>保留一个反直觉惊喜位</span>
-            </label>
           </div>
 
           <div class="visited-tools">
             <div>
               <p class="eyebrow">已经去过</p>
-              <p class="hint">点亮目的地会降低命中概率，不会粗暴删除。</p>
+              <p class="hint">点亮后会从抽签候选里排除，清空可恢复。</p>
             </div>
             <button class="text-button" type="button" id="clearVisited">清空</button>
           </div>
@@ -99,48 +80,38 @@
         </form>
 
         <section class="panel result" aria-live="polite">
-          <div class="ticket" id="ticket">
-            <p class="eyebrow">今日签文</p>
-            <h2 id="resultCity">先设条件再抽签</h2>
-            <p id="resultSummary">这里会显示目的地亮点、为什么适合你们、路线和交通估算。</p>
+          <div class="result-picks">
+            <article class="ticket" id="ticket">
+              <p class="eyebrow">常规答案</p>
+              <h2 id="resultCity">先设条件再抽签</h2>
+              <p id="resultSummary">优先在你选定的交通范围内抽出一个周末答案。</p>
+            </article>
+            <article class="ticket ticket--surprise" id="surpriseTicket">
+              <p class="eyebrow">惊喜答案</p>
+              <h2 id="surpriseCity">等你抽签</h2>
+              <p id="surpriseSummary">每次都会附带一个反直觉备选，适合当场二选一。</p>
+            </article>
           </div>
 
           <div class="map-card">
             <div class="mini-map" id="miniMap" aria-label="目的地分布示意图"></div>
-            <div class="probability">
-              <div class="section-title">
-                <span>候选概率 Top 5</span>
-                <strong id="candidateTotal">0</strong>
-              </div>
-              <div id="probabilityBars"></div>
-            </div>
           </div>
 
-          <div class="result-grid">
-            <div>
-              <p class="eyebrow">为什么是它</p>
+          <div class="result-grid result-grid--dual">
+            <div class="result-detail">
+              <p class="eyebrow">常规理由</p>
               <ul class="reason-list" id="reasonList"></ul>
-            </div>
-            <div>
-              <p class="eyebrow">推荐路线</p>
+              <p class="eyebrow">常规路线</p>
               <ol class="route-list" id="routeList"></ol>
+            </div>
+            <div class="result-detail">
+              <p class="eyebrow">惊喜理由</p>
+              <ul class="reason-list" id="surpriseReasonList"></ul>
+              <p class="eyebrow">惊喜路线</p>
+              <ol class="route-list" id="surpriseRouteList"></ol>
             </div>
           </div>
         </section>
-      </section>
-
-      <section class="destination-board">
-        <div class="section-title">
-          <div>
-            <p class="eyebrow">目的地库</p>
-            <h2>从大城市到县城、县级市和非典型周末目的地</h2>
-          </div>
-          <div class="legend">
-            <span><i class="dot is-good"></i>范围内</span>
-            <span><i class="dot is-soft"></i>降权保留</span>
-          </div>
-        </div>
-        <div class="card-grid" id="destinationCards"></div>
       </section>
 
       <section class="notes">

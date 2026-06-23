@@ -6,7 +6,6 @@ const baseSettings = {
   startCity: shanghaiStart.id,
   travelMode: "drive4",
   tripDays: "2",
-  visitedPenalty: "0.25",
   strictRange: true,
   surpriseMode: false,
   visited: [],
@@ -74,8 +73,9 @@ const looseCandidates = app.getCandidates({ ...baseSettings, strictRange: false,
 assert.ok(looseCandidates.length > strictCandidates.length, "惊喜位应扩大候选池");
 
 const normalSuzhou = app.scoreDestination(suzhou, nearDriveSettings).score;
-const visitedSuzhou = app.scoreDestination(suzhou, { ...nearDriveSettings, visited: ["suzhou"] }).score;
-assert.ok(visitedSuzhou < normalSuzhou, "已去过目的地应被降权");
+const visitedSuzhou = app.scoreDestination(suzhou, { ...nearDriveSettings, visited: ["suzhou"] });
+assert.strictEqual(visitedSuzhou, null, "已去过目的地应直接排除");
+assert.ok(!app.getCandidates({ ...nearDriveSettings, visited: ["suzhou"] }).some((item) => item.dest.id === "suzhou"), "已去过目的地不应出现在候选中");
 
 const lowPreferenceSuzhou = app.scoreDestination(suzhou, { ...nearDriveSettings, nature: 0, culture: 0, food: 0, quiet: 0, romance: 0, budget: 0 }).score;
 const highPreferenceSuzhou = app.scoreDestination(suzhou, { ...nearDriveSettings, nature: 100, culture: 100, food: 100, quiet: 100, romance: 100, budget: 100 }).score;
@@ -83,5 +83,9 @@ assert.strictEqual(lowPreferenceSuzhou, highPreferenceSuzhou, "抽签权重不�
 
 const picked = app.weightedPick(strictCandidates, () => 0.01);
 assert.ok(picked && picked.dest && picked.score > 0, "加权抽签应返回有效目的地");
+
+const drawPair = app.pickDrawPair(baseSettings);
+assert.ok(drawPair.primary && drawPair.surprise, "抽签应同时返回常规答案和惊喜答案");
+assert.notStrictEqual(drawPair.primary.dest.id, drawPair.surprise.dest.id, "常规答案和惊喜答案不应重复");
 
 console.log("logic tests passed");

@@ -366,6 +366,14 @@
     return { min: 0, max: 4 };
   }
 
+  function isPracticalSurprise(hours, mode) {
+    if (mode === "drive2") return hours > 2 && hours <= 4.5;
+    if (mode === "drive4") return (hours >= 0.75 && hours < 2) || (hours > 4 && hours <= 6);
+    if (mode === "rail4") return hours > 4 && hours <= 6.5;
+    if (mode === "flight") return hours > 1 && hours <= 6.5;
+    return true;
+  }
+
   function isSamePlace(start, dest) {
     return dest.name === start.city || dest.name === start.fullName || dest.name.replace(/市$/, "") === start.city;
   }
@@ -378,11 +386,10 @@
     const inRange = (hours >= travelWindow.min && hours <= travelWindow.max) || isSamePlace(start, dest);
     if (settings.strictRange && !inRange && !settings.surpriseMode) return null;
 
-    const qualityFit = 0.82 + Math.min(18, Math.max(0, dest.weekendScore - 70)) / 100;
-    const dayFit = Number(settings.tripDays) === 2 && dest.cost >= 4 ? 0.9 : 1;
-    let score = 100 * qualityFit * dayFit;
+    if ((settings.visited || []).includes(dest.id)) return null;
+    const dayFit = Number(settings.tripDays) === 2 && dest.cost >= 4 ? 0.96 : 1;
+    let score = 100 * dayFit;
     if (!inRange) score *= settings.surpriseMode ? 0.28 : 0.12;
-    if ((settings.visited || []).includes(dest.id)) score *= Number(settings.visitedPenalty || 0.25);
     if (isSamePlace(start, dest)) score *= 0.04;
     return {
       dest,
@@ -396,7 +403,7 @@
   function buildReasons(dest, settings, hours, inRange) {
     return [
       `${dest.province}${dest.name}：${dest.summary}`,
-      "本次抽签更强调随机性，只保留交通范围、去过降权和惊喜位这些硬条件。",
+      "本次抽签更强调随机性，只保留交通范围、已去过排除和惊喜答案这些硬条件。",
       `${inRange ? "交通范围内" : "作为惊喜位保留"}，当前口径约 ${hours.toFixed(1)} 小时。`,
     ];
   }
@@ -411,8 +418,9 @@
     if (!settings.strictRange || settings.surpriseMode || primary.length >= 8) return primary.length ? primary : scored;
 
     const seen = new Set(primary.map((item) => item.dest.id));
+    const visited = new Set(settings.visited || []);
     const supplements = destinations
-      .filter((dest) => !seen.has(dest.id) && !isSamePlace(start, dest))
+      .filter((dest) => !seen.has(dest.id) && !visited.has(dest.id) && !isSamePlace(start, dest))
       .map((dest) => {
         const hours = getTravelHours(start, dest, settings.travelMode || "drive2");
         const distance = haversineKm(start, dest);
@@ -460,10 +468,12 @@
     estimateRailHours,
     getTravelHours,
     getTravelWindow,
+    isPracticalSurprise,
     scoreDestination,
     getCandidates,
     weightedPick,
     formatHours,
+    pickDrawPair,
   };
 
   if (typeof module !== "undefined" && module.exports) module.exports = api;
@@ -483,9 +493,6 @@
   const visitedSearch = $("#visitedSearch");
   const travelMode = $("#travelMode");
   const tripDays = $("#tripDays");
-  const visitedPenalty = $("#visitedPenalty");
-  const strictRange = $("#strictRange");
-  const surpriseMode = $("#surpriseMode");
   const drawButton = $("#drawButton");
   const rerollButton = $("#rerollButton");
 
@@ -494,9 +501,7 @@
       startCity: startCity.value,
       travelMode: travelMode.value,
       tripDays: tripDays.value,
-      visitedPenalty: visitedPenalty.value,
-      strictRange: strictRange.checked,
-      surpriseMode: surpriseMode.checked,
+      strictRange: true,
       visited: state.visited,
     };
   }
@@ -507,10 +512,8 @@
     startCity.value = defaultStart.id;
     renderVisited();
     renderMap();
-    renderDestinationCards();
     bindEvents();
     updateStats();
-    renderCandidates(settingsFromDom());
   }
 
   function bindEvents() {
@@ -523,8 +526,6 @@
       input.addEventListener("input", () => {
         updateStats();
         renderMap();
-        renderDestinationCards();
-        renderCandidates(settingsFromDom());
       });
     });
     $("#clearVisited").addEventListener("click", () => {
@@ -556,8 +557,6 @@
   function refreshAll() {
     updateStats();
     renderMap();
-    renderDestinationCards();
-    renderCandidates(settingsFromDom());
   }
 
   function renderVisited(keyword = "") {
@@ -595,10 +594,11 @@
     $("#visitedCount").textContent = state.visited.length;
   }
 
-  function renderMap(selectedId) {
+  function renderMap(selectedIds = []) {
     const settings = settingsFromDom();
     const start = departures.find((item) => item.id === settings.startCity);
     const candidates = new Set(getCandidates(settings).filter((item) => item.inRange).map((item) => item.dest.id));
+    const selected = Array.isArray(selectedIds) ? selectedIds : [selectedIds];
     const minLon = 99;
     const maxLon = 123;
     const minLat = 21;
@@ -608,89 +608,84 @@
         const x = ((dest.lon - minLon) / (maxLon - minLon)) * 92 + 4;
         const y = (1 - (dest.lat - minLat) / (maxLat - minLat)) * 88 + 6;
         const classes = ["map-dot"];
-        if (dest.id === selectedId) classes.push("is-selected");
+        if (dest.id === selected[0]) classes.push("is-selected");
+        if (dest.id === selected[1]) classes.push("is-surprise");
         if (dest.id === start.id) classes.push("is-start");
-        const title = `${dest.name}${candidates.has(dest.id) ? "，范围内" : "，降权或范围外"}`;
+        const title = `${dest.name}${candidates.has(dest.id) ? "，范围内" : "，范围外或已排除"}`;
         return `<span class="${classes.join(" ")}" style="left:${x}%;top:${y}%" title="${title}"></span>`;
       })
       .join("");
     $("#miniMap").innerHTML = dots;
   }
 
-  function renderCandidates(settings) {
-    const candidates = getCandidates(settings);
-    $("#candidateTotal").textContent = candidates.length;
-    const max = candidates[0] ? candidates[0].score : 1;
-    $("#probabilityBars").innerHTML = candidates
-      .slice(0, 5)
-      .map((item) => {
-        const width = Math.max(6, (item.score / max) * 100);
-        return `<div class="bar">
-          <div class="bar-label"><span>${item.dest.name}</span><span>${formatHours(item.hours, settings.travelMode)}</span></div>
-          <div class="bar-track"><div class="bar-fill" style="--w:${width}%"></div></div>
-        </div>`;
-      })
-      .join("");
-  }
-
-  function renderDestinationCards() {
-    const settings = settingsFromDom();
-    const scored = new Map(getCandidates({ ...settings, strictRange: false, surpriseMode: true }).map((item) => [item.dest.id, item]));
-    $("#destinationCards").innerHTML = destinations
-      .slice()
-      .sort((a, b) => (scored.get(b.id)?.score || 0) - (scored.get(a.id)?.score || 0))
-      .map((dest) => {
-        const item = scored.get(dest.id);
-        const status = item && item.inRange ? "is-good" : "is-soft";
-        return `<article class="city-card">
-          <div>
-            <h3><i class="dot ${status}"></i>${dest.name}</h3>
-            <p>${dest.summary}</p>
-          </div>
-          <div class="city-tags">${dest.tags.map((tag) => `<span>${tag}</span>`).join("")}</div>
-        </article>`;
-      })
-      .join("");
+  function pickDrawPair(settings) {
+    const primaryCandidates = getCandidates({ ...settings, surpriseMode: false });
+    const primary = weightedPick(primaryCandidates);
+    const relaxed = getCandidates({ ...settings, strictRange: false, surpriseMode: true }).filter((item) => !primary || item.dest.id !== primary.dest.id);
+    const practicalSurprises = relaxed.filter((item) => !item.inRange && isPracticalSurprise(item.hours, settings.travelMode));
+    const surprisePool = practicalSurprises.length ? practicalSurprises : relaxed.filter((item) => !item.inRange);
+    const surprise = weightedPick(surprisePool.length ? surprisePool : relaxed);
+    return { primary, surprise, primaryCandidates };
   }
 
   function runDraw(isReroll) {
     const settings = settingsFromDom();
-    const candidates = getCandidates(settings);
+    const candidates = getCandidates({ ...settings, surpriseMode: false });
     if (!candidates.length) {
       $("#resultCity").textContent = "这组条件太严格了";
-      $("#resultSummary").textContent = "打开惊喜位，或把交通范围切到全国随缘，就能继续抽。";
+      $("#resultSummary").textContent = "把交通范围切到全国随缘，或关闭交通范围限制，就能继续抽。";
+      $("#surpriseCity").textContent = "暂无惊喜答案";
+      $("#surpriseSummary").textContent = "常规候选为空时不会强行给出不可靠结果。";
       return;
     }
     state.lastSettings = settings;
     drawButton.classList.add("is-spinning");
     drawButton.disabled = true;
+    const surpriseReel = getCandidates({ ...settings, strictRange: false, surpriseMode: true })
+      .filter((item) => !item.inRange && isPracticalSurprise(item.hours, settings.travelMode))
+      .slice(0, 12);
     const reel = candidates.slice(0, 12);
     let step = 0;
     const timer = setInterval(() => {
       const item = reel[step % reel.length];
+      const surpriseItem = surpriseReel.length ? surpriseReel[step % surpriseReel.length] : null;
       $("#resultCity").textContent = item.dest.name;
       $("#resultSummary").textContent = item.dest.tags.join(" · ");
+      if (surpriseItem) {
+        $("#surpriseCity").textContent = surpriseItem.dest.name;
+        $("#surpriseSummary").textContent = surpriseItem.dest.tags.join(" · ");
+      }
       step += 1;
       if (step > (isReroll ? 9 : 14)) {
         clearInterval(timer);
-        const picked = weightedPick(candidates);
-        state.lastResult = picked;
+        const pair = pickDrawPair(settings);
+        state.lastResult = pair;
         drawButton.disabled = false;
         drawButton.classList.remove("is-spinning");
-        renderResult(picked, settings);
+        renderResult(pair, settings);
       }
     }, 78);
   }
 
-  function renderResult(item, settings) {
+  function renderSingleResult(item, titleSelector, summarySelector, reasonsSelector, routeSelector, settings, fallbackText) {
+    if (!item) {
+      $(titleSelector).textContent = fallbackText;
+      $(summarySelector).textContent = "这组条件下暂时没有合适的第二答案。";
+      $(reasonsSelector).innerHTML = "";
+      $(routeSelector).innerHTML = "";
+      return;
+    }
     const dest = item.dest;
-    $("#resultCity").textContent = `${dest.name} · ${dest.province}`;
-    $("#resultSummary").textContent = `${formatHours(item.hours, settings.travelMode)}。${dest.summary}`;
-    $("#reasonList").innerHTML = item.reasons.map((reason) => `<li>${reason}</li>`).join("");
-    $("#routeList").innerHTML = dest.route.map((stop) => `<li>${stop}</li>`).join("");
-    renderCandidates(settings);
-    renderMap(dest.id);
-    renderDestinationCards();
+    $(titleSelector).textContent = `${dest.name} · ${dest.province}`;
+    $(summarySelector).textContent = `${formatHours(item.hours, settings.travelMode)}。${dest.summary}`;
+    $(reasonsSelector).innerHTML = item.reasons.map((reason) => `<li>${reason}</li>`).join("");
+    $(routeSelector).innerHTML = dest.route.map((stop) => `<li>${stop}</li>`).join("");
+  }
+
+  function renderResult(pair, settings) {
+    renderSingleResult(pair.primary, "#resultCity", "#resultSummary", "#reasonList", "#routeList", settings, "暂无常规答案");
+    renderSingleResult(pair.surprise, "#surpriseCity", "#surpriseSummary", "#surpriseReasonList", "#surpriseRouteList", settings, "暂无惊喜答案");
+    renderMap([pair.primary?.dest.id, pair.surprise?.dest.id].filter(Boolean));
   }
 
   init();
