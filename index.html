@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>周末去哪儿抽签</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="hero">
+        <div class="hero__media" aria-hidden="true"></div>
+        <div class="hero__content">
+          <div class="title-block">
+            <p class="eyebrow">情侣周末 / 小长假目的地抽签</p>
+            <h1>周末去哪儿抽签</h1>
+            <p class="lead">选出发地、交通方式和偏好，让目的地用概率说服你们出门。</p>
+          </div>
+          <div class="quick-stats" aria-label="目的地库概览">
+            <div><strong id="cityCount">0</strong><span>个真实目的地</span></div>
+            <div><strong id="departureCount">0</strong><span>个出发城市</span></div>
+            <div><strong id="nearbyCount">0</strong><span>当前可达</span></div>
+            <div><strong id="visitedCount">0</strong><span>已去过降权</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="workbench" aria-label="抽签工作台">
+        <form class="panel controls" id="controls">
+          <div class="panel-heading">
+            <p class="eyebrow">筛选条件</p>
+            <h2>先把选择变少，再把答案交给运气</h2>
+          </div>
+
+          <div class="control-grid">
+            <label class="field">
+              <span>出发城市</span>
+              <input class="search-input" id="startSearch" type="search" placeholder="搜索全国城市，如：青岛、丽江、阿勒泰" autocomplete="off" />
+              <select id="startCity" name="startCity"></select>
+            </label>
+            <label class="field">
+              <span>交通范围</span>
+              <select id="travelMode" name="travelMode">
+                <option value="drive4">4小时自驾圈</option>
+                <option value="rail4">4小时高铁圈</option>
+                <option value="flight">小长假可飞</option>
+                <option value="any">全国随缘</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>出行时长</span>
+              <select id="tripDays" name="tripDays">
+                <option value="2">2天1晚</option>
+                <option value="3">3天2晚</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>去过目的地降权</span>
+              <select id="visitedPenalty" name="visitedPenalty">
+                <option value="0.25">明显降低</option>
+                <option value="0.45">轻度降低</option>
+                <option value="0.08">几乎不抽到</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="switch-row">
+            <label class="switch">
+              <input type="checkbox" id="strictRange" checked />
+              <span>严格限制在所选交通范围内</span>
+            </label>
+            <label class="switch">
+              <input type="checkbox" id="surpriseMode" />
+              <span>保留一个反直觉惊喜位</span>
+            </label>
+          </div>
+
+          <div class="sliders" aria-label="旅行偏好">
+            <label><span>自然感</span><input type="range" id="nature" min="0" max="100" value="62" /></label>
+            <label><span>历史文化</span><input type="range" id="culture" min="0" max="100" value="70" /></label>
+            <label><span>好吃程度</span><input type="range" id="food" min="0" max="100" value="78" /></label>
+            <label><span>松弛安静</span><input type="range" id="quiet" min="0" max="100" value="48" /></label>
+            <label><span>浪漫氛围</span><input type="range" id="romance" min="0" max="100" value="72" /></label>
+            <label><span>预算友好</span><input type="range" id="budget" min="0" max="100" value="58" /></label>
+          </div>
+
+          <div class="visited-tools">
+            <div>
+              <p class="eyebrow">已经去过</p>
+              <p class="hint">点亮目的地会降低命中概率，不会粗暴删除。</p>
+            </div>
+            <button class="text-button" type="button" id="clearVisited">清空</button>
+          </div>
+          <label class="field visited-search">
+            <span>搜索已去过目的地</span>
+            <input class="search-input" id="visitedSearch" type="search" placeholder="输入目的地、地区或标签，如：青田、温泉、海边" autocomplete="off" />
+          </label>
+          <div class="chip-cloud" id="visitedChips" aria-label="已去过目的地"></div>
+
+          <div class="actions">
+            <button class="primary-button" type="button" id="drawButton">
+              <span class="button-icon">✦</span>
+              开始抽签
+            </button>
+            <button class="secondary-button" type="button" id="rerollButton">换一个同条件答案</button>
+          </div>
+        </form>
+
+        <section class="panel result" aria-live="polite">
+          <div class="ticket" id="ticket">
+            <p class="eyebrow">今日签文</p>
+            <h2 id="resultCity">先设条件，再抽一签</h2>
+            <p id="resultSummary">这里会显示目的地亮点、为什么适合你们、路线和交通估算。</p>
+          </div>
+
+          <div class="map-card">
+            <div class="mini-map" id="miniMap" aria-label="目的地分布示意图"></div>
+            <div class="probability">
+              <div class="section-title">
+                <span>候选概率 Top 5</span>
+                <strong id="candidateTotal">0</strong>
+              </div>
+              <div id="probabilityBars"></div>
+            </div>
+          </div>
+
+          <div class="result-grid">
+            <div>
+              <p class="eyebrow">为什么是它</p>
+              <ul class="reason-list" id="reasonList"></ul>
+            </div>
+            <div>
+              <p class="eyebrow">推荐路线</p>
+              <ol class="route-list" id="routeList"></ol>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <section class="destination-board">
+        <div class="section-title">
+          <div>
+            <p class="eyebrow">目的地库</p>
+            <h2>从大城市到县城、县级市和非典型周末目的地</h2>
+          </div>
+          <div class="legend">
+            <span><i class="dot is-good"></i>范围内</span>
+            <span><i class="dot is-soft"></i>降权保留</span>
+          </div>
+        </div>
+        <div class="card-grid" id="destinationCards"></div>
+      </section>
+
+      <section class="notes">
+        <h2>资料口径</h2>
+        <p>目的地经纬度用于粗略估算自驾/高铁半径，文旅亮点参考国家级旅游休闲街区、夜间文化和旅游消费集聚区、国家级旅游度假区、地方文旅资料和公开地理资料。实际路况、车次和营业状态出行前仍需用地图与 12306 复核。</p>
+        <div class="source-links">
+          <a href="https://zh.wikipedia.org/wiki/%E5%9B%BD%E5%AE%B6%E7%BA%A7%E6%97%85%E6%B8%B8%E4%BC%91%E9%97%B2%E8%A1%97%E5%8C%BA" target="_blank" rel="noreferrer">国家级旅游休闲街区</a>
+          <a href="https://zh.wikipedia.org/wiki/%E5%9B%BD%E5%AE%B6%E7%BA%A7%E5%A4%9C%E9%97%B4%E6%96%87%E5%8C%96%E5%92%8C%E6%97%85%E6%B8%B8%E6%B6%88%E8%B4%B9%E9%9B%86%E8%81%9A%E5%8C%BA" target="_blank" rel="noreferrer">夜间文旅消费集聚区</a>
+          <a href="https://en.wikipedia.org/wiki/GeoNames" target="_blank" rel="noreferrer">GeoNames 经纬度资料口径</a>
+          <a href="https://www.12306.cn" target="_blank" rel="noreferrer">铁路 12306</a>
+        </div>
+      </section>
+    </main>
+
+    <script src="data/departures.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
