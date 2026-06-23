@@ -125,6 +125,104 @@
     };
   }
 
+  function normalizePlaceName(name) {
+    return String(name || "")
+      .replace(/特别行政区|地区|盟|市$/g, "")
+      .replace(/自治州$/g, "")
+      .replace(/藏族自治州|蒙古自治州|回族自治州|维吾尔自治州|哈萨克自治州|柯尔克孜自治州|土家族苗族自治州|苗族侗族自治州|布依族苗族自治州|傣族自治州|彝族自治州|哈尼族彝族自治州|壮族苗族自治州|傈僳族自治州|白族自治州|傣族景颇族自治州|朝鲜族自治州/g, "");
+  }
+
+  function compactProvinceName(name) {
+    return String(name || "")
+      .replace(/特别行政区|壮族自治区|回族自治区|维吾尔自治区|自治区|省|市$/g, "");
+  }
+
+  function hashString(value) {
+    return String(value).split("").reduce((hash, char) => ((hash << 5) - hash + char.charCodeAt(0)) | 0, 0);
+  }
+
+  function clampScore(value) {
+    return Math.max(30, Math.min(96, Math.round(value)));
+  }
+
+  const coastalProvinces = new Set(["天津市", "上海市", "海南省", "香港特别行政区", "澳门特别行政区"]);
+  const coastalCities = new Set([
+    "大连", "丹东", "锦州", "营口", "盘锦", "葫芦岛",
+    "秦皇岛", "唐山", "沧州",
+    "青岛", "东营", "烟台", "潍坊", "威海", "日照", "滨州",
+    "连云港", "盐城", "南通", "苏州",
+    "嘉兴", "宁波", "温州", "舟山", "台州",
+    "福州", "厦门", "莆田", "泉州", "漳州", "宁德",
+    "广州", "深圳", "珠海", "汕头", "佛山", "江门", "湛江", "茂名", "惠州", "汕尾", "东莞", "中山", "阳江", "潮州", "揭阳",
+    "北海", "防城港", "钦州"
+  ]);
+  const mountainProvinces = new Set(["山西省", "安徽省", "江西省", "河南省", "湖北省", "湖南省", "重庆市", "四川省", "贵州省", "云南省", "陕西省", "甘肃省"]);
+  const frontierProvinces = new Set(["内蒙古自治区", "西藏自治区", "青海省", "宁夏回族自治区", "新疆维吾尔自治区"]);
+  const riverProvinces = new Set(["黑龙江省", "吉林省", "湖北省", "湖南省", "江西省", "安徽省", "江苏省", "重庆市", "四川省", "广西壮族自治区"]);
+
+  function buildExplorationProfile(dep) {
+    const seed = Math.abs(hashString(dep.id));
+    const province = dep.province;
+    const name = dep.city;
+    const isCoastal = coastalProvinces.has(province) || coastalCities.has(name);
+    const isMountain = mountainProvinces.has(province);
+    const isFrontier = frontierProvinces.has(province);
+    const isRiver = riverProvinces.has(province);
+    const foodLift = ["广东省", "四川省", "重庆市", "湖南省", "湖北省", "福建省", "广西壮族自治区", "贵州省", "新疆维吾尔自治区"].includes(province) ? 10 : 0;
+    const cultureLift = dep.fullName.includes("自治") || dep.fullName.includes("地区") || dep.fullName.includes("盟") ? 8 : 0;
+    const natureLift = isCoastal || isMountain || isFrontier ? 12 : isRiver ? 8 : 0;
+    const quietLift = dep.fullName.includes("自治州") || dep.fullName.includes("地区") || dep.fullName.includes("盟") ? 10 : 0;
+    const budgetLift = ["河南省", "河北省", "山西省", "安徽省", "江西省", "广西壮族自治区", "贵州省", "甘肃省", "宁夏回族自治区"].includes(province) ? 8 : 0;
+    const variance = (seed % 11) - 5;
+    const waterStop = isCoastal ? "海边、港口或滨水公园" : isRiver ? "江河湖边或城市绿道" : isMountain || isFrontier ? "近郊山地、公园或观景点" : "城市公园或河边散步";
+    const localFood = isFrontier ? "本地市集和民族风味小馆" : isCoastal ? "海鲜或港城小馆" : foodLift ? "本地夜市和招牌小吃" : "本地早餐店和小馆";
+    const tags = isFrontier
+      ? ["城市探索", "边地市集", "地方风味"]
+      : isCoastal
+        ? ["城市探索", "滨水散步", "地方风味"]
+        : isMountain
+          ? ["城市探索", "近郊山水", "地方风味"]
+          : ["城市探索", "地方馆", "夜市小馆"];
+    const summaryTail = isFrontier
+      ? "边地市集、民族风味和开阔地貌让它很适合反套路周末。"
+      : isCoastal
+        ? "滨水空间、城市街区和本地小馆能组成轻松但不空泛的一晚。"
+        : isMountain
+          ? "城市尺度、近郊山水和地方饭馆放在一起，适合不追热门景区的周末。"
+          : "它不靠热门景点取胜，但地方馆、老街市场和夜宵早餐能看见真实城市肌理。";
+    return {
+      weekendScore: clampScore(68 + natureLift * 0.45 + foodLift * 0.35 + cultureLift * 0.35 + variance),
+      cost: isFrontier || ["海南省", "西藏自治区"].includes(province) ? 3 : 2,
+      scores: [
+        clampScore(48 + natureLift + variance),
+        clampScore(56 + cultureLift + Math.floor(seed % 13)),
+        clampScore(58 + foodLift + Math.floor(seed % 17)),
+        clampScore(56 + quietLift + Math.floor(seed % 15)),
+        clampScore(52 + (isCoastal ? 10 : isMountain ? 8 : 4) + Math.floor(seed % 12)),
+        clampScore(72 + budgetLift - (isFrontier ? 6 : 0) + Math.floor(seed % 10)),
+      ],
+      tags,
+      route: [`${name}城市展馆或博物馆`, `${name}老街、步行街或生活街区`, localFood, waterStop],
+      summary: `${compactProvinceName(province)}${name}是城市探索型目的地，${summaryTail}`,
+    };
+  }
+
+  function addExplorationDestinations() {
+    const existingNames = new Set(destinations.map((dest) => normalizePlaceName(dest.name)));
+    const existingIds = new Set(destinations.map((dest) => dest.id));
+    departures.forEach((dep) => {
+      if (!dep || !dep.city || dep.city === "台湾" || !Number.isFinite(dep.lat) || !Number.isFinite(dep.lon)) return;
+      const nameKey = normalizePlaceName(dep.city);
+      if (!nameKey || existingNames.has(nameKey)) return;
+      const id = `urban-${dep.adcode}`;
+      if (existingIds.has(id)) return;
+      const profile = buildExplorationProfile(dep);
+      destinations.push(city(id, dep.city, compactProvinceName(dep.province), dep.lat, dep.lon, profile.weekendScore, profile.cost, profile.scores, profile.tags, profile.route, profile.summary));
+      existingNames.add(nameKey);
+      existingIds.add(id);
+    });
+  }
+
   destinations.push(
     city("shenyang", "沈阳", "辽宁", 41.8057, 123.4315, 84, 3, [42, 90, 86, 42, 66, 78], ["故宫", "夜市", "鸡架"], ["沈阳故宫", "张氏帅府", "中街夜市", "西塔或老四季"], "东北城市底色很浓，历史街区和夜宵都适合短途。"),
     city("dalian", "大连", "辽宁", 38.914, 121.6147, 90, 4, [90, 70, 88, 62, 92, 48], ["海岸", "广场", "海鲜"], ["星海广场", "滨海路", "东港夜景", "海鲜小馆"], "北方海滨的浪漫值很高，适合小长假看海。"),
@@ -193,6 +291,8 @@
     city("lhasa", "拉萨", "西藏", 29.652, 91.1721, 88, 4, [88, 98, 78, 70, 92, 36], ["布达拉宫", "寺院", "高原"], ["布达拉宫广场", "八廓街", "大昭寺外转经", "藏餐甜茶"], "高原文化冲击力很强，适合充分准备的小长假。"),
     city("nyingchi", "林芝", "西藏", 29.6486, 94.3615, 88, 4, [100, 72, 76, 86, 92, 42], ["桃花", "峡谷", "雪山"], ["巴松措", "雅鲁藏布江大峡谷备选", "尼洋河", "石锅鸡"], "自然柔和但震撼，春季桃花线尤其值得。")
   );
+
+  addExplorationDestinations();
 
   const railOverrides = {
     shanghai: { suzhou: 0.6, hangzhou: 0.8, nanjing: 1.2, ningbo: 1.9, shaoxing: 1.4, yangzhou: 2.1, huzhou: 1.8, huangshan: 2.7, jiaxing: 0.6, jiashan: 0.4, tongxiang: 0.8, haining: 0.9, pinghu: 0.7, wuxi: 0.9, changshu: 1.2, kunshan: 0.3, taicang: 0.8, zhangjiagang: 1.5, jiangyin: 1.6, yixing: 2.0, liyang: 2.0, changzhou: 1.1, hefei: 2.2, anji: 2.0, deqing: 1.6, tonglu: 2.2, chunan: 3.0, zhuji: 1.9, xinchang: 2.4, shengzhou: 2.2, yiwu: 1.8, dongyang: 2.3, wuyi: 2.6, jinyun: 3.0, songyang: 3.4, yunhe: 3.6, qingtian: 3.4, linhai: 2.8, xiangshan: 3.3, ninghai: 2.8, yuyao: 1.8, cixi: 1.9, yueqing: 3.7 },
@@ -278,14 +378,9 @@
     const inRange = (hours >= travelWindow.min && hours <= travelWindow.max) || isSamePlace(start, dest);
     if (settings.strictRange && !inRange && !settings.surpriseMode) return null;
 
-    const prefs = ["nature", "culture", "food", "quiet", "romance", "budget"];
-    const preferenceScore = prefs.reduce((sum, key) => {
-      const weight = (settings[key] ?? 50) / 100;
-      return sum + (dest[key] / 100) * weight * 18;
-    }, 0);
-    const budgetFit = Math.max(0.45, 1.18 - dest.cost * 0.08 + (settings.budget || 50) / 350);
-    const dayFit = Number(settings.tripDays) === 2 && dest.cost >= 4 ? 0.78 : 1;
-    let score = (dest.weekendScore + preferenceScore) * budgetFit * dayFit;
+    const qualityFit = 0.82 + Math.min(18, Math.max(0, dest.weekendScore - 70)) / 100;
+    const dayFit = Number(settings.tripDays) === 2 && dest.cost >= 4 ? 0.9 : 1;
+    let score = 100 * qualityFit * dayFit;
     if (!inRange) score *= settings.surpriseMode ? 0.28 : 0.12;
     if ((settings.visited || []).includes(dest.id)) score *= Number(settings.visitedPenalty || 0.25);
     if (isSamePlace(start, dest)) score *= 0.04;
@@ -299,21 +394,9 @@
   }
 
   function buildReasons(dest, settings, hours, inRange) {
-    const high = ["nature", "culture", "food", "quiet", "romance", "budget"]
-      .map((key) => ({ key, value: dest[key], want: settings[key] || 50 }))
-      .sort((a, b) => b.value * b.want - a.value * a.want)
-      .slice(0, 2);
-    const label = {
-      nature: "自然感",
-      culture: "历史文化",
-      food: "吃喝密度",
-      quiet: "松弛安静",
-      romance: "浪漫氛围",
-      budget: "预算友好",
-    };
     return [
       `${dest.province}${dest.name}：${dest.summary}`,
-      `最匹配你们的偏好是${high.map((item) => label[item.key]).join("和")}，不是只靠名气入选。`,
+      "本次抽签更强调随机性，只保留交通范围、去过降权和惊喜位这些硬条件。",
       `${inRange ? "交通范围内" : "作为惊喜位保留"}，当前口径约 ${hours.toFixed(1)} 小时。`,
     ];
   }
@@ -333,7 +416,7 @@
       .map((dest) => {
         const hours = getTravelHours(start, dest, settings.travelMode || "drive2");
         const distance = haversineKm(start, dest);
-        const score = Math.max(0.1, (dest.weekendScore + dest.romance * 0.35 + dest.food * 0.25 + dest.nature * 0.2) * Math.max(0.28, 1 - distance / 1800));
+        const score = Math.max(0.1, 100 * Math.max(0.28, 1 - distance / 1800));
         return {
           dest,
           score,
@@ -415,12 +498,6 @@
       strictRange: strictRange.checked,
       surpriseMode: surpriseMode.checked,
       visited: state.visited,
-      nature: Number($("#nature").value),
-      culture: Number($("#culture").value),
-      food: Number($("#food").value),
-      quiet: Number($("#quiet").value),
-      romance: Number($("#romance").value),
-      budget: Number($("#budget").value),
     };
   }
 
@@ -442,7 +519,7 @@
       refreshAll();
     });
     visitedSearch.addEventListener("input", () => renderVisited(visitedSearch.value));
-    document.querySelectorAll("select,input[type='range'],input[type='checkbox']").forEach((input) => {
+    document.querySelectorAll("select,input[type='checkbox']").forEach((input) => {
       input.addEventListener("input", () => {
         updateStats();
         renderMap();
