@@ -378,6 +378,30 @@
     return dest.name === start.city || dest.name === start.fullName || dest.name.replace(/市$/, "") === start.city;
   }
 
+  function getTripFit(dest, hours, settings) {
+    const days = Number(settings.tripDays) || 2;
+    if (days >= 3) {
+      const multiplier = dest.cost >= 3 ? 1 : 0.92;
+      const note = dest.cost >= 3 ? "3天2晚能把核心体验排完整，节奏更从容。" : "3天2晚会比较轻松，适合把城市慢慢逛开。";
+      return { multiplier, note, exclude: false };
+    }
+
+    if (dest.cost >= 4 && hours > 4.5 && !settings.surpriseMode) {
+      return { multiplier: 0, note: "更适合3天2晚或小长假。", exclude: true };
+    }
+    if (hours > 6.5 && !settings.surpriseMode) {
+      return { multiplier: 0, note: "路程偏长，更适合小长假。", exclude: true };
+    }
+
+    let multiplier = 1;
+    if (dest.cost >= 4) multiplier = 0.62;
+    else if (dest.cost === 3) multiplier = 0.88;
+
+    if (hours > 4.5) multiplier *= 0.7;
+    const note = dest.cost <= 2 ? "2天1晚能轻松覆盖主要体验。" : "2天1晚可以去，但建议早出发、少塞行程。";
+    return { multiplier, note, exclude: false };
+  }
+
   function scoreDestination(dest, settings) {
     const start = departures.find((item) => item.id === settings.startCity) || departures[0];
     const mode = settings.travelMode || "drive2";
@@ -387,8 +411,9 @@
     if (settings.strictRange && !inRange && !settings.surpriseMode) return null;
 
     if ((settings.visited || []).includes(dest.id)) return null;
-    const dayFit = Number(settings.tripDays) === 2 && dest.cost >= 4 ? 0.96 : 1;
-    let score = 100 * dayFit;
+    const tripFit = getTripFit(dest, hours, settings);
+    if (tripFit.exclude) return null;
+    let score = 100 * tripFit.multiplier;
     if (!inRange) score *= settings.surpriseMode ? 0.28 : 0.12;
     if (isSamePlace(start, dest)) score *= 0.04;
     return {
@@ -396,15 +421,15 @@
       score: Math.max(0.1, score),
       hours,
       inRange,
-      reasons: buildReasons(dest, settings, hours, inRange),
+      reasons: buildReasons(dest, settings, hours, inRange, tripFit),
     };
   }
 
-  function buildReasons(dest, settings, hours, inRange) {
+  function buildReasons(dest, settings, hours, inRange, tripFit) {
     return [
       `${dest.province}${dest.name}：${dest.summary}`,
-      "本次抽签更强调随机性，只保留交通范围、已去过排除和惊喜答案这些硬条件。",
-      `${inRange ? "交通范围内" : "作为惊喜位保留"}，当前口径约 ${hours.toFixed(1)} 小时。`,
+      tripFit.note,
+      `${inRange ? "在所选交通范围内" : "作为惊喜备选"}，预计约 ${hours.toFixed(1)} 小时。`,
     ];
   }
 
@@ -432,8 +457,8 @@
           inRange: false,
           reasons: [
             `${dest.province}${dest.name}：${dest.summary}`,
-            "当前出发地周边候选偏少，系统把它作为最近的区域补充备选加入。",
-            `区域补充备选，当前口径约 ${hours.toFixed(1)} 小时。`,
+            getTripFit(dest, hours, settings).note,
+            `作为距离较近的补充备选，预计约 ${hours.toFixed(1)} 小时。`,
           ],
         };
       })
