@@ -29,7 +29,7 @@
         <form class="panel controls" id="controls">
           <div class="panel-heading">
             <p class="eyebrow">筛选条件</p>
-            <h2>先把选择变少，再把答案交给运气</h2>
+            <h2>先筛选，再抽签</h2>
           </div>
 
           <div class="control-grid">
@@ -41,7 +41,8 @@
             <label class="field">
               <span>交通范围</span>
               <select id="travelMode" name="travelMode">
-                <option value="drive4">4小时自驾圈</option>
+                <option value="drive2">1～2小时自驾</option>
+                <option value="drive4">2～4小时自驾</option>
                 <option value="rail4">4小时高铁圈</option>
                 <option value="flight">小长假可飞</option>
                 <option value="any">全国随缘</option>
@@ -67,7 +68,7 @@
           <div class="switch-row">
             <label class="switch">
               <input type="checkbox" id="strictRange" checked />
-              <span>严格限制在所选交通范围内</span>
+              <span>优先限制在所选交通范围内</span>
             </label>
             <label class="switch">
               <input type="checkbox" id="surpriseMode" />
@@ -109,7 +110,7 @@
         <section class="panel result" aria-live="polite">
           <div class="ticket" id="ticket">
             <p class="eyebrow">今日签文</p>
-            <h2 id="resultCity">先设条件，再抽一签</h2>
+            <h2 id="resultCity">先设条件再抽签</h2>
             <p id="resultSummary">这里会显示目的地亮点、为什么适合你们、路线和交通估算。</p>
           </div>
 
